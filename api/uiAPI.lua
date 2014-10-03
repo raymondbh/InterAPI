@@ -30,6 +30,7 @@ function uiAPI.createButton(name, caption, x, y, width, height)
     ["background"] = colors.blue,
     ["x"] = x,
     ["y"] = y,
+    ["z"] = 0,
     ["width"] = width - 1,
     ["height"] = height,
     ["func"] = false
@@ -44,9 +45,10 @@ function uiAPI.createFrame(name, caption, x, y, width, height)
     ["name"] = name,
     ["caption"] = caption,
     ["foreground"] = colors.gray,
-    ["background"] = colors.lightblue,
+    ["background"] = colors.blue,
     ["x"] = x,
     ["y"] = y,
+    ["z"] = 0,
     ["width"] = width - 1,
     ["height"] = height,
     ["func"] = false
@@ -54,6 +56,24 @@ function uiAPI.createFrame(name, caption, x, y, width, height)
   return uiAPI.widget[name]
 end
 
+function uiAPI.createWindow(name, caption, posX, posY, width, height)
+  uiAPI.widget[name] = {
+    ["type"] = "window",
+    ["repaint"] = true,
+    ["name"] = name,
+    ["caption"] = caption,
+    ["foreground"] = colors.gray,
+    ["background"] = colors.lightblue,
+    ["x"] = posX,
+    ["y"] = posY,
+    ["z"] = 0,
+    ["width"] = width - 1,
+    ["height"] = height,
+    ["func"] = false
+  }
+  uiAPI.widget[name]["content"] = {}
+  return uiAPI.widget[name]
+end
 
 -- -- -- -- uiAPI internal functions -- -- -- --
 
@@ -145,11 +165,15 @@ end
 
 function uiAPI.set(name, field, value)
   uiAPI.widget[name][field] = value
-  uiAPI.widget[name].repaint = true
+  -- uiAPI.widget[name].repaint = true
 end
 
 function uiAPI.get(name, value)
   return uiAPI.widget[name][value]
+end
+
+function uiAPI.addContent(name, value)
+  uiAPI.widget[name].content[value] = value
 end
 
 
@@ -175,11 +199,34 @@ function uiAPI.screenDraw()
     elseif val.type == "framefullscreen" and val.repaint then
       local width, height = gpu.getResolution()
       width = width - 1
-      drawBorder(1, 1, width, height, val.foreground, val.background, val.border)
-      topCaption(val.caption, 1, 1, width, height, val.foreground, val.background)
+      borderBox(1, 1, width, height, val.foreground, val.background, val.border)
+      topCaption(val.caption, 1, 1, width, val.foreground, val.background)
     end
     val.repaint = false
   end
+  gpu.setBackground(bgColor, true)
+  gpu.setForeground(fgColor, true)
+  term.setCursor(cursorX, cursorY)
+end
+
+function uiAPI.windowDraw()
+  -- Save colors and cursor
+  local cursorX, cursorY = term.getCursor()
+  local bgColor = gpu.getBackground()
+  local fgColor = gpu.getForeground()
+  for var,val in pairs(uiAPI.widget) do
+    if val.type == "window" and val.repaint then
+      -- Activate content for repaint
+      for count,wid in pairs(uiAPI.widget[val.name].content) do
+        uiAPI.widget[uiAPI.widget[val.name].content[wid]].repaint = true
+      end
+      -- Draw window background
+      fillBox(val.x, val.y, val.width, val.height, val.background)
+      -- Draw window content
+      uiAPI.screenDraw()
+    end
+  end
+  -- Load saved colors and cursor
   gpu.setBackground(bgColor, true)
   gpu.setForeground(fgColor, true)
   term.setCursor(cursorX, cursorY)
@@ -197,13 +244,15 @@ end
 
 function uiAPI.runOnce()
   uiAPI.screenDraw()
+  uiAPI.windowDraw()
   e = {event.pull()}
   if e[1] == "touch" then
     uiAPI.checkClick(e[3], e[4], e)
   else
     return e
   end
-  uiAPI.screenDraw()
+  uiAPI.windowDraw()
+  -- uiAPI.screenDraw()
 end
 
 function uiAPI.run()
